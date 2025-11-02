@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Interactive Date Invitation — Sweet Mode 💌</title>
+<style>
+  /* ------------------------------
+     Shared styling
+     ------------------------------ */
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap');
+  :root{
+    --bg-1: #fff0f6;
+    --bg-2: #fff7fb;
+    --accent: #ff4f9a;
+    --muted: #5b5b5b;
+    --glass: rgba(255,255,255,0.7);
+  }
+  html,body{height:100%;margin:0;font-family:'Poppins',system-ui,Segoe UI,Roboto,Helvetica,Arial; background: radial-gradient(circle at 10% 10%, #fff0f6 0%, #fff7fb 35%, #f7f0ff 100%); overflow:hidden;}
+  .center {
+    position: absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    max-width:420px; width:92%;
+  }
+
+  /* Card base */
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.86));
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 12px 30px rgba(15,15,20,0.12);
+    border: 1px solid rgba(255,255,255,0.6);
+    backdrop-filter: blur(6px);
+  }
+  h1{ margin:0 0 8px; font-size:20px; color:var(--accent); }
+  p{ margin:0 0 14px; color:var(--muted); font-size:14px; }
+
+  .row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+
+  .btn {
+    background: linear-gradient(135deg, #eb96b8, #b8f3e0);
+    border: none;
+    color: rgb(110, 13, 106);
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-weight:600;
+    cursor:pointer;
+    box-shadow: 0 8px 18px rgba(231, 145, 177, 0.18);
+    transition: transform .22s ease, box-shadow .22s;
+  }
+  .btn:hover{ transform: translateY(-3px); box-shadow: 0 18px 28px rgba(255,88,150,0.22); }
+
+  .ghost {
+    background: rgb(189, 143, 233);
+    color: var(--muted);
+    border: 1px solid rgba(177, 126, 126, 0.08);
+    padding:8px 14px;
+    border-radius: 999px;
+  }
+
+  /* popup overlays */
+  .overlay {
+    position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:50;
+    pointer-events:none;
+  }
+  .overlay .card { pointer-events: auto; }
+
+  /* Input */
+  .txt {
+    width:100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.06);
+    font-size:14px;
+    outline:none;
+  }
+
+  /* small helpers */
+  .muted { color:var(--muted); font-size:13px; }
+  .center-inline{ display:inline-flex; align-items:center; gap:8px; }
+
+  /* ------------------------------
+     Popup / step styles (different look per popup)
+     ------------------------------ */
+
+  /* Step style 1 - gentle */
+  .step-1 .card{ width:380px; text-align:center; border-radius:20px; padding:22px 26px; background: linear-gradient(180deg,#fff7fb,#fff0f3);}
+  .step-1 h1{ color:#ff3b87; }
+
+  /* Step style 2 - soft rounded with blur hearts */
+  .step-2 .card{ width:420px; padding:28px; background: linear-gradient(160deg,#fffdfb,#fff3fb); border-radius:28px; }
+  .hearts-bg{ position:absolute; inset:0; z-index:40; pointer-events:none; opacity:0.12; filter:blur(6px); }
+
+  /* Step style 3 - subtle dark accent */
+  .step-3 .card{ width:420px; background: linear-gradient(180deg,#ffffff,#f9f0fb); box-shadow: 0 20px 40px rgba(190,80,140,0.08); border-radius:18px; }
+
+  /* Step style 4 - fireworks canvas container (fullscreen) */
+  #fireworksCanvas{ position: fixed; inset:0; z-index:5; pointer-events:none; }
+
+  /* run-away No button */
+  #noBtn {
+    position:relative;
+    transition: left 10s linear, top 15s linear;
+  }
+
+  /* final frame decorative moving object */
+  .floating-heart {
+    position: fixed;
+    left:10%;
+    top:80%;
+    width:64px; height:64px;
+    transform: translate(-50%,-50%);
+    z-index:60;
+    pointer-events:none;
+    animation: floatUp 6s linear infinite;
+  }
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1); opacity:1; left:10%; }
+    50% { transform: translateY(-120px) scale(1.08); left:60%; opacity:.9; }
+    100% { transform: translateY(-220px) scale(1.0); left:90%; opacity:0.6; }
+  }
+
+  /* small responsive */
+  @media (max-width:420px){
+    .card{ padding:16px; border-radius:14px }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Centered base area -->
+  <div class="center">
+    <div class="card" id="baseCard">
+      <h1>Hey there 💌</h1>
+      <p class="muted">I made a little surprise chat — would you like to try it?</p>
+      <div class="row">
+        <button class="btn" id="startBtn">Start the little chat</button>
+        <button class="ghost" id="skipBtn">Maybe later</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUPS: we'll create overlays dynamically but keep containers for style classes -->
+  <div id="popupRoot"></div>
+
+  <!-- fireworks canvas -->
+  <canvas id="fireworksCanvas"></canvas>
+
+  <!-- floating heart / moving object -->
+  <svg class="floating-heart" viewBox="0 0 512 512" id="floatingHeart" style="display:none;">
+    <path fill="#ff5ea0" d="M471.7 73c-54.5-53.6-143-53.6-197.5 0L256 90.2l-18.3-17.2c-54.5-53.6-143-53.6-197.5 0-62 61-62 160 0 221l215.8 203.1c6 5.7 16 5.7 22 0L471.7 294c62-61 62-160 0-221z"/>
+  </svg>
+
+<script>
+/* ------------------------------
+   Small utility & state
+   ------------------------------ */
+const popupRoot = document.getElementById('popupRoot');
+let state = {
+  step: 0,
+  mood: 'neutral',
+  selectedPlace: null,
+  noClicks: 0
+};
+
+function createOverlay(className='') {
+  const ov = document.createElement('div');
+  ov.className = 'overlay ' + className;
+  const card = document.createElement('div');
+  card.className = 'card';
+  ov.appendChild(card);
+  return { ov, card };
+}
+
+/* ------------------------------
+   Step 1: "Hey, how you doing?" with placeholder -> send button appears
+   ------------------------------ */
+document.getElementById('startBtn').addEventListener('click', () => openGreetingPopup());
+
+function openGreetingPopup(){
+  state.step = 1;
+  popupRoot.innerHTML = ''; // clear
+  const {ov, card} = createOverlay('step-1');
+  card.innerHTML = `
+    <h1>Hey — how are you doing today?</h1>
+    <p class="muted">Type a short reply, I'll read it and respond 💬</p>
+    <input id="userTxt" class="txt" placeholder="Type your mood (e.g., happy, tired, sad, excited)..." />
+    <div style="height:12px"></div>
+    <div id="sendRow" style="display:flex;justify-content:center;gap:10px;opacity:0;transition:opacity .3s">
+      <button class="btn" id="sendBtn">Send</button>
+      <button class="ghost" id="skipMood">Skip</button>
+    </div>
+  `;
+  popupRoot.appendChild(ov);
+
+  // show send button only when typing
+  const userTxt = document.getElementById('userTxt');
+  const sendRow = document.getElementById('sendRow');
+  userTxt.addEventListener('input', () => {
+    if (userTxt.value.trim().length > 0) sendRow.style.opacity = 1;
+    else sendRow.style.opacity = 0;
+  });
+  document.getElementById('sendBtn').addEventListener('click', () => {
+    const text = userTxt.value.trim().toLowerCase();
+    if (!text) return openMoodResponse('neutral', "No worries — we can continue!");
+    // simple sentiment / keyword detection
+    const happyWords = ['happy','good','great','fine','awesome','nice','excited','joy','glad','amazing','cool','smile','lovely'];
+    const sadWords = ['sad','tired','depressed','bad','down','upset','not good','lonely','angry','cry','stressed'];
+    let mood='neutral';
+    for (let w of happyWords) if (text.includes(w)) mood='happy';
+    for (let w of sadWords) if (text.includes(w)) mood='sad';
+    openMoodResponse(mood, text);
+  });
+  document.getElementById('skipMood').addEventListener('click', () => openMoodResponse('neutral', "Let's continue 😊"));
+}
+
+/* Step 1 response & animation */
+function openMoodResponse(mood, originalText){
+  state.mood = mood;
+  popupRoot.innerHTML = '';
+  const {ov, card} = createOverlay('step-2');
+  // decorative hearts background (subtle)
+  const hearts = document.createElement('div');
+  hearts.className = 'hearts-bg';
+  hearts.innerHTML = `
+    <svg width="100%" height="100%" viewBox="0 0 800 200" preserveAspectRatio="none">
+      <g fill="#ff7bb0" opacity="0.18">
+        <path d="M80 80c20-30 60-40 80-10 20-30 60-40 80-10 30 36-12 92-60 122-48-30-90-86-100-102z"/>
+        <path d="M520 90c18-25 52-33 70-8 18-25 52-33 70-8 26 30-10 78-48 104-36-26-70-68-92-88z"/>
+      </g>
+    </svg>
+  `;
+  ov.appendChild(hearts);
+  card.innerHTML = `<h1>${ mood === 'happy' ? 'That’s wonderful! 🌸' : mood==='sad' ? 'I’m here for you 🤍' : 'Alright — let’s go!' }</h1>
+    <p class="muted">${ mood === 'happy'
+        ? `Your message made me smile — "${escapeHtml(originalText)}"`
+        : mood === 'sad'
+          ? `I’m sorry you feel that way. I have something that might cheer you up.`
+          : `Thanks for sharing. Ready for a tiny question?`
+      }</p>
+    <div class="row" id="moodButtons">
+      <button class="btn" id="moodNext">Next</button>
+      <button class="ghost" id="moodClose">Close</button>
+    </div>
+  `;
+  popupRoot.appendChild(ov);
+  document.getElementById('moodNext').addEventListener('click', () => {
+    // If sad, show gentle message then continue
+    if (mood === 'sad') {
+      // small gentle prompt then proceed
+      card.querySelector('.muted').textContent = "Give me a moment — I have a little plan to brighten your day ✨";
+      setTimeout(() => openAskPermissionPopup(), 1100);
+    } else {
+      openAskPermissionPopup();
+    }
+  });
+  document.getElementById('moodClose').addEventListener('click', () => popupRoot.innerHTML = '');
+}
+
+/* Step 2: "May I ask you something?" */
+function openAskPermissionPopup(){
+  state.step = 2;
+  popupRoot.innerHTML = '';
+  const {ov, card} = createOverlay('step-3');
+  card.innerHTML = `
+    <h1>May I ask you something?</h1>
+    <p class="muted">It's a little question — say yes if you're comfortable 😊</p>
+    <div class="row">
+      <button class="btn" id="askYes">Yes</button>
+      <button class="ghost" id="askNo">No</button>
+    </div>
+  `;
+  popupRoot.appendChild(ov);
+
+  document.getElementById('askYes').addEventListener('click', () => {
+    // show a quick "Are you sure?" confirmation
+    openAreYouSure(() => openPlaceChoicePopup(), () => {
+      // if she says no to "Are you sure?" we'll still proceed (per flow)
+      openPlaceChoicePopup();
+    });
+  });
+  document.getElementById('askNo').addEventListener('click', () => {
+    // close gently
+    popupRoot.innerHTML = '';
+    // but still offer to continue after a second
+    setTimeout(openPlaceChoicePopup, 700);
+  });
+}
+
+/* tiny confirm "Are you sure?" modal */
+function openAreYouSure(onYes, onNo){
+  const {ov, card} = createOverlay();
+  card.innerHTML = `<h1>Are you sure?</h1><p class="muted">Just checking — I want to be respectful.</p>
+    <div class="row"><button class="btn" id="sureYes">Yes</button><button class="ghost" id="sureNo">No</button></div>`;
+  popupRoot.appendChild(ov);
+  document.getElementById('sureYes').addEventListener('click', () => { popupRoot.innerHTML=''; onYes(); });
+  document.getElementById('sureNo').addEventListener('click', () => { popupRoot.innerHTML=''; onNo(); });
+}
+
+/* Step 3: place selection */
+function openPlaceChoicePopup(){
+  state.step = 3;
+  popupRoot.innerHTML = '';
+  const {ov, card} = createOverlay('step-1');
+  card.innerHTML = `
+    <h1>Which place would you like to visit?</h1>
+    <p class="muted">Pick one — or pick both if you'd like a full day ✨</p>
+    <div class="row">
+      <button class="btn" id="dak">Dakshineswar Mandir</button>
+      <button class="btn" id="bel">Belur Math</button>
+      <button class="btn" id="both">Both 😍</button>
+    </div>
+  `;
+  popupRoot.appendChild(ov);
+  document.getElementById('dak').addEventListener('click', () => choosePlace('Dakshineswar Mandir'));
+  document.getElementById('bel').addEventListener('click', () => choosePlace('Belur Math'));
+  document.getElementById('both').addEventListener('click', () => choosePlace('Both'));
+}
+
+function choosePlace(place){
+  state.selectedPlace = place;
+  openAllowPopup(place);
+}
+
+/* Step 4: "Would you allow me to take you to those places?" with runaway No behavior */
+function openAllowPopup(place){
+  state.step = 4;
+  state.noClicks = 0;
+  popupRoot.innerHTML = '';
+  const {ov, card} = createOverlay('step-3');
+  card.innerHTML = `
+    <h1>Would you allow me to take you to ${escapeHtml(place)}?</h1>
+    <p class="muted">It would mean a lot to me 💖</p>
+    <div class="row">
+      <button class="btn" id="allowYes">Yes</button>
+      <button class="ghost" id="noBtn">No</button>
+    </div>
+  `;
+  popupRoot.appendChild(ov);
+
+  const noBtn = document.getElementById('noBtn');
+  const yesBtn = document.getElementById('allowYes');
+
+  yesBtn.addEventListener('click', () => {
+    popupRoot.innerHTML = '';
+    openFinalSuccess();
+  });
+
+  // runaway behavior: on hover or repeated clicks, it moves randomly
+  function moveNo() {
+    state.noClicks++;
+    const rect = noBtn.getBoundingClientRect();
+    // compute random safe spot inside viewport
+    const padding = 20;
+    const w = window.innerWidth - rect.width - padding;
+    const h = window.innerHeight - rect.height - padding;
+    const left = Math.random() * (w - padding) + padding;
+    const top = Math.random() * (h - padding) + padding;
+    noBtn.style.position = 'fixed';
+    noBtn.style.left = `${left}px`;
+    noBtn.style.top = `${top}px`;
+    // playful shake if repeated
+    if (state.noClicks > 6) {
+      noBtn.style.transition = 'transform 1s';
+      noBtn.style.transform = 'translateX(-10px)';
+      setTimeout(()=> noBtn.style.transform = 'translateX(6px)', 20);
+      setTimeout(()=> noBtn.style.transform = 'translateX(0)', 20);
+    }
+  }
+
+  noBtn.addEventListener('mouseover', moveNo);
+  noBtn.addEventListener('click', () => {
+    moveNo();
+    // after a few direct clicks, show a tiny modal "Are you sure ma'am?"
+    if (state.noClicks >= 2) {
+      openAreYouSure(() => {
+        // If she confirms yes to "Are you sure?" we accept and show a small graceful goodbye popup
+        popupRoot.innerHTML = '';
+        const {ov2, card:card2} = createOverlay();
+        card2.innerHTML = `<h1>Okay — I respect that 🙏</h1><p class="muted">Whenever you feel like it, we can try another time.</p>
+          <div class="row"><button class="btn" id="finalClose">Close</button></div>`;
+        popupRoot.appendChild(ov2);
+        document.getElementById('finalClose').addEventListener('click', ()=> popupRoot.innerHTML='');
+      }, () => {
+        // if she says no on are you sure, go back to allow popup to continue
+        openAllowPopup(place);
+      });
+    }
+  });
+}
+
+/* Final success popup: music + moving object + fireworks + message */
+function openFinalSuccess(){
+  popupRoot.innerHTML = '';
+  const {ov, card} = createOverlay();
+  card.style.textAlign='center';
+  card.innerHTML = `
+    <h1>Yay! 🌟</h1>
+    <p class="muted">I knew you'd say yes — thank you! Let's make it a wonderful day together.</p>
+    <div style="height:12px"></div>
+    <div class="row">
+      <button class="btn" id="finalOk">Let's plan it</button>
+      <button class="ghost" id="finalClose">Close</button>
+    </div>
+  `;
+  popupRoot.appendChild(ov);
+
+  // show floating heart and start music & fireworks
+  document.getElementById('finalOk').addEventListener('click', () => {
+    // reveal floating heart
+    document.getElementById('floatingHeart').style.display='block';
+    startRomanticMusic();
+    startFireworks();
+    // small follow-up message
+    card.innerHTML = `<h1>I know you 💖</h1><p class="muted">Thank you for saying yes — I’ll make it special. Close this when you're ready.</p>
+      <div style="height:12px"></div>
+      <div class="row"><button class="btn" id="doneClose">Close</button></div>`;
+    document.getElementById('doneClose').addEventListener('click', () => {
+      popupRoot.innerHTML = '';
+      stopRomanticMusic();
+      stopFireworks();
+      document.getElementById('floatingHeart').style.display='none';
+    });
+  });
+
+  document.getElementById('finalClose').addEventListener('click', () => {
+    popupRoot.innerHTML = '';
+  });
+}
+
+/* ------------------------------
+   Fireworks canvas (simple)
+   ------------------------------ */
+const canvas = document.getElementById('fireworksCanvas');
+const ctx = canvas.getContext('2d');
+let fwAnimating = false;
+let fwParticles = [];
+
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function startFireworks(){
+  fwAnimating = true;
+  // launch a few initial fireworks
+  for (let i=0;i<5;i++) launchFirework(Math.random()*canvas.width, Math.random()*canvas.height*0.6 + canvas.height*0.1);
+  requestAnimationFrame(fwLoop);
+}
+function stopFireworks(){
+  fwAnimating = false;
+  fwParticles = [];
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+function launchFirework(x,y){
+  const count = 30 + Math.floor(Math.random()*40);
+  for (let i=0;i<count;i++){
+    const speed = 1 + Math.random()*4;
+    const angle = Math.random()*Math.PI*2;
+    fwParticles.push({
+      x,y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      life: 60 + Math.floor(Math.random()*60),
+      color: `hsl(${Math.random()*360} 80% 60%)`
+    });
+  }
+}
+function fwLoop(){
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  for (let i=fwParticles.length-1;i>=0;i--){
+    const p = fwParticles[i];
+    p.life--;
+    p.x += p.vx;
+    p.y += p.vy + 0.02 * (60 - p.life); // slight gravity-ish
+    p.vx *= 0.99;
+    p.vy *= 0.99;
+    ctx.beginPath();
+    ctx.fillStyle = p.color;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.max(0, p.life/120);
+    ctx.arc(p.x, p.y, 2.2, 0, Math.PI*2);
+    ctx.fill();
+    if (p.life <= 0) fwParticles.splice(i,1);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  if (fwAnimating) {
+    if (Math.random() < 0.08) launchFirework(Math.random()*canvas.width, Math.random()*canvas.height*0.6 + canvas.height*0.1);
+    requestAnimationFrame(fwLoop);
+  }
+}
+
+/* ------------------------------
+   Romatic music via WebAudio (simple chord loop)
+   ------------------------------ */
+let audioCtx = null;
+let musicNodes = [];
+
+function startRomanticMusic(){
+  if (audioCtx) return; // already started
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = audioCtx.createGain(); master.gain.value = 0.08; master.connect(audioCtx.destination);
+
+  // simple slow arpeggiated chords (two oscillators)
+  const notes = [440, 550, 660, 880]; // A4-ish progression for a dreamy feel (not keyed perfectly)
+  let i = 0;
+  function playNote(freq, time){
+    const o1 = audioCtx.createOscillator();
+    o1.type = 'sine';
+    o1.frequency.value = freq;
+    const g1 = audioCtx.createGain(); g1.gain.value = 0.0;
+    o1.connect(g1); g1.connect(master);
+    o1.start(time);
+    g1.gain.linearRampToValueAtTime(0.09, time + 0.02);
+    g1.gain.exponentialRampToValueAtTime(0.0001, time + 3.6);
+    o1.stop(time + 4.0);
+    musicNodes.push(o1);
+  }
+
+  function schedule(){
+    const now = audioCtx.currentTime;
+    playNote(notes[i%notes.length], now);
+    playNote(notes[(i+1)%notes.length]*0.5, now+0.4);
+    i++;
+    const t = setTimeout(schedule, 900);
+    musicNodes.push({stop:()=>clearTimeout(t)});
+  }
+  schedule();
+}
+
+function stopRomanticMusic(){
+  if (!audioCtx) return;
+  try{
+    audioCtx.close();
+  }catch(e){}
+  audioCtx = null;
+  musicNodes = [];
+}
+
+/* expose start/stop wrappers for readability */
+function startFireworks(){ startFireworksInternal(); } // placeholder
+function stopFireworks(){ stopFireworksInternal(); } // placeholder
+
+/* fix references: rename actual functions to internal to avoid hoisting mismatch */
+function startFireworksInternal(){ startFireworksReal(); }
+function stopFireworksInternal(){ stopFireworksReal(); }
+function startFireworksReal(){ // use the fw functions defined above
+  startFireworks(); // uses fwAnimating variable
+}
+function stopFireworksReal(){ stopFireworks(); }
+
+/* ------------------------------
+   small util: escape HTML
+   ------------------------------ */
+function escapeHtml(s){
+  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+/* ------------------------------
+   Keyboard / accessibility: allow starting with Enter
+   ------------------------------ */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'userTxt') {
+    const btn = document.getElementById('sendBtn');
+    if (btn) btn.click();
+  }
+});
+
+/* ------------------------------
+   fix small hoisted function name collisions used earlier
+   ------------------------------ */
+function startFireworks(){ startFireworksReal(); }
+function stopFireworks(){ stopFireworksReal(); }
+
+/* ------------------------------
+   End of script
+   ------------------------------ */
+</script>
+</body>
+</html>
